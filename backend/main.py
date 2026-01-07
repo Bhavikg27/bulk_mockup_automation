@@ -1,0 +1,277 @@
+from fastapi import FastAPI, UploadFile, File, Form, HTTPException
+from fastapi.staticfiles import StaticFiles
+from fastapi.middleware.cors import CORSMiddleware
+from pydantic import BaseModel
+import shutil
+import os
+import cv2
+import numpy as np
+import json
+from typing import List, Tuple
+
+app = FastAPI()
+
+# CORS configuration
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],  # For development, allow all. In production, be specific.
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+# Directories
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+MOCKUPS_DIR = os.path.join(BASE_DIR, "..", "mockups_db") # Store uploaded mockups here
+OUTPUT_DIR = os.path.join(BASE_DIR, "..", "generated_mockups")
+DESIGNS_DIR = os.path.join(BASE_DIR, "..", "designs_db")
+DATA_FILE = os.path.join(BASE_DIR, "data.json")
+
+# Ensure directories exist
+os.makedirs(MOCKUPS_DIR, exist_ok=True)
+os.makedirs(OUTPUT_DIR, exist_ok=True)
+os.makedirs(DESIGNS_DIR, exist_ok=True)
+
+# Mount static files to serve images
+app.mount("/mockups", StaticFiles(directory=MOCKUPS_DIR), name="mockups")
+app.mount("/generated", StaticFiles(directory=OUTPUT_DIR), name="generated")
+
+# Data Models
+class Point(BaseModel):
+    x: float
+    y: float
+
+class MockupConfig(BaseModel):
+    id: str
+    name: str
+    points: List[Point] # Top-left, Top-right, Bottom-right, Bottom-left
+
+# Helper to load/save data
+def load_data():
+    if not os.path.exists(DATA_FILE):
+        return {"mockups": []}
+    with open(DATA_FILE, "r") as f:
+        return json.load(f)
+
+def save_data(data):
+    with open(DATA_FILE, "w") as f:
+        json.dump(data, f, indent=4)
+
+@app.get("/")
+def read_root():
+    return {"message": "Mockup Generator API is running"}
+
+@app.get("/mockups", response_model=List[MockupConfig])
+def get_mockups():
+    data = load_data()
+    return data["mockups"]
+
+@app.post("/upload-mockup")
+async def upload_mockup(file: UploadFile = File(...)):
+    file_path = os.path.join(MOCKUPS_DIR, file.filename)
+    with open(file_path, "wb") as buffer:
+        shutil.copyfileobj(file.file, buffer)
+    
+    # Initialize default config for this mockup if not exists
+    data = load_data()
+    # Check if exists
+    existing = next((item for item in data["mockups"] if item["name"] == file.filename), None)
+    
+    if not existing:
+        # Default points (just some placeholder values, user will adjust)
+        # We might want to read image size to set better defaults, but for now...
+        default_config = {
+            "id": file.filename, # Simple ID
+            "name": file.filename,
+            "points": [
+                {"x": 100, "y": 100},
+                {"x": 300, "y": 100},
+                {"x": 300, "y": 300},
+                {"x": 100, "y": 300}
+            ]
+        }
+        data["mockups"].append(default_config)
+        save_data(data)
+        
+    return {"filename": file.filename, "url": f"/mockups/{file.filename}"}
+
+@app.post("/save-config")
+async def save_config(config: MockupConfig):
+    data = load_data()
+    for i, item in enumerate(data["mockups"]):
+        if item["id"] == config.id:
+            data["mockups"][i] = config.dict()
+            save_data(data)
+            return {"message": "Configuration saved"}
+    
+    # If not found, append (should have been created on upload, but safe fallback)
+    data["mockups"].append(config.dict())
+    save_data(data)
+    return {"message": "Configuration created"}
+
+# Helper for generation logic
+def process_mockup_generation(mockup_id, design_content, design_filename):
+    data = load_data()
+    config = next((item for item in data["mockups"] if item["id"] == mockup_id), None)
+    
+    if not config:
+        raise ValueError("Mockup config not found")
+
+    mockup_path = os.path.join(MOCKUPS_DIR, config["name"])
+    if not os.path.exists(mockup_path):
+        raise ValueError("Mockup file not found")
+
+    # Read images
+    nparr = np.frombuffer(design_content, np.uint8)
+    design_img = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
+    mockup_img = cv2.imread(mockup_path)
+    
+    if mockup_img is None or design_img is None:
+         raise ValueError("Error loading images")
+
+    h_design, w_design, _ = design_img.shape
+    
+    # Source points (corners of design)
+    src_pts = np.array([
+        [0, 0],
+        [w_design - 1, 0],
+        [w_design - 1, h_design - 1],
+        [0, h_design - 1]
+    ], dtype=np.float32)
+
+    # Dest points from config
+    dst_pts = np.array([
+        [p["x"], p["y"]] for p in config["points"]
+    ], dtype=np.float32)
+
+    # Perspective Transform
+    matrix = cv2.getPerspectiveTransform(src_pts, dst_pts)
+    warped_design = cv2.warpPerspective(design_img, matrix, (mockup_img.shape[1], mockup_img.shape[0]), flags=cv2.INTER_CUBIC)
+    
+    # Mask
+    mask = np.zeros(mockup_img.shape[:2], dtype=np.uint8)
+    cv2.fillConvexPoly(mask, dst_pts.astype(np.int32), 255)
+    
+    # Blend
+    mask_inv = cv2.bitwise_not(mask)
+    mockup_bg = cv2.bitwise_and(mockup_img, mockup_img, mask=mask_inv)
+    final_result = cv2.add(mockup_bg, cv2.bitwise_and(warped_design, warped_design, mask=mask))
+
+    # Save output
+    output_filename = f"generated_{design_filename}_{config['name']}"
+    output_path = os.path.join(OUTPUT_DIR, output_filename)
+    cv2.imwrite(output_path, final_result)
+    
+    return {
+        "url": f"/generated/{output_filename}",
+        "filename": output_filename
+    }
+
+@app.post("/generate")
+async def generate(mockup_id: str = Form(...), design: UploadFile = File(...)):
+    try:
+        content = await design.read()
+        return process_mockup_generation(mockup_id, content, design.filename)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/generate-bulk")
+async def generate_bulk(mockup_id: str = Form(...), designs: List[UploadFile] = File(...)):
+    results = []
+    errors = []
+    
+    for design in designs:
+        try:
+            content = await design.read()
+            res = process_mockup_generation(mockup_id, content, design.filename)
+            results.append(res)
+        except Exception as e:
+            errors.append(f"Failed {design.filename}: {str(e)}")
+            
+    return {
+        "results": results,
+        "errors": errors,
+        "count": len(results)
+    }
+
+@app.get("/generated-images")
+def get_generated_images():
+    images = []
+    # Sort by modification time, newest first
+    files = sorted(os.listdir(OUTPUT_DIR), key=lambda x: os.path.getmtime(os.path.join(OUTPUT_DIR, x)), reverse=True)
+    for filename in files:
+        if filename.endswith(('.png', '.jpg', '.jpeg')):
+            images.append({
+                "filename": filename,
+                "url": f"/generated/{filename}"
+            })
+    return images
+
+from fastapi.responses import StreamingResponse
+import io
+
+@app.post("/preview")
+async def preview(
+    mockup_id: str = Form(...),
+    points: str = Form(...),
+    design: UploadFile = File(...)
+):
+    try:
+        # Load Mockup Image (to get dimensions)
+        data = load_data()
+        config = next((item for item in data["mockups"] if item["id"] == mockup_id), None)
+        if not config:
+            raise HTTPException(status_code=404, detail="Mockup not found")
+            
+        mockup_path = os.path.join(MOCKUPS_DIR, config["name"])
+        mockup_img = cv2.imread(mockup_path)
+        if mockup_img is None:
+            raise HTTPException(status_code=404, detail="Mockup file invalid")
+            
+        # Parse points
+        # Expected JSON: [{"x":1, "y":2}, ...]
+        pts_list = json.loads(points)
+        dst_pts = np.array([
+            [p["x"], p["y"]] for p in pts_list
+        ], dtype=np.float32)
+        
+        # Load Design (from memory/upload)
+        contents = await design.read()
+        nparr = np.frombuffer(contents, np.uint8)
+        design_img = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
+        
+        if design_img is None:
+             raise HTTPException(status_code=400, detail="Invalid design image")
+             
+        # Process
+        h_design, w_design, _ = design_img.shape
+        src_pts = np.array([
+            [0, 0],
+            [w_design - 1, 0],
+            [w_design - 1, h_design - 1],
+            [0, h_design - 1]
+        ], dtype=np.float32)
+        
+        # Warp
+        matrix = cv2.getPerspectiveTransform(src_pts, dst_pts)
+        warped_design = cv2.warpPerspective(design_img, matrix, (mockup_img.shape[1], mockup_img.shape[0]), flags=cv2.INTER_CUBIC)
+        
+        # Create Alpha Channel (Mask)
+        mask = np.zeros(mockup_img.shape[:2], dtype=np.uint8)
+        cv2.fillConvexPoly(mask, dst_pts.astype(np.int32), 255)
+        
+        # Add Alpha Channel to Warped Design
+        b, g, r = cv2.split(warped_design)
+        rgba = [b, g, r, mask]
+        warped_rgba = cv2.merge(rgba, 4)
+        
+        # Optimize: Encode as PNG in memory
+        _, encoded_img = cv2.imencode('.png', warped_rgba)
+        
+        return StreamingResponse(io.BytesIO(encoded_img.tobytes()), media_type="image/png")
+        
+    except Exception as e:
+        print(f"Preview Error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))

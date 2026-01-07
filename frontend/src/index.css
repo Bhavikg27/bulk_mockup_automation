@@ -1,0 +1,25 @@
+@import "tailwindcss";
+
+@theme {
+  --color-primary: #06b6d4; /* Cyan 500 */
+  --color-secondary: #8b5cf6; /* Violet 500 */
+  --color-accent: #f43f5e; /* Rose 500 */
+  
+  /* Semantic Colors */
+  --color-canvas: #020617; /* Slate 950 */
+  --color-surface: #0f172a; /* Slate 900 */
+  --color-surface-highlight: #1e293b; /* Slate 800 */
+}
+
+body {
+  background-color: var(--color-canvas);
+  color: #e2e8f0; /* Slate 200 */
+  font-family: 'Inter', sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* Global Glass Class */
+.glass-panel {
+  @apply bg-slate-900/60 backdrop-blur-md border border-white/10;
+}
