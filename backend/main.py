@@ -104,7 +104,7 @@ async def save_config(config: MockupConfig):
             save_data(data)
             return {"message": "Configuration saved"}
     
-    # If not found, append (should have been created on upload, but safe fallback)
+    # If not found, append
     data["mockups"].append(config.dict())
     save_data(data)
     return {"message": "Configuration created"}
@@ -148,8 +148,6 @@ def process_mockup_generation(mockup_id, design_content, design_filename):
     matrix = cv2.getPerspectiveTransform(src_pts, dst_pts)
     
     # Warp Design
-    # Use LANCZOS4 for better resampling quality
-    # Use BORDER_REPLICATE to avoid edge darkening (dark halos) when blending
     warped_design = cv2.warpPerspective(
         design_img, 
         matrix, 
