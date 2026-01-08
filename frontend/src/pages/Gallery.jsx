@@ -23,7 +23,7 @@ const Gallery = () => {
 
   return (
     <div>
-      <h1 className="text-3xl font-bold text-gray-900 mb-2">Gallery</h1>
+      <h1 className="text-3xl font-bold text-white mb-2">Gallery</h1>
       <p className="text-gray-500 mb-8">View and download your generated mockups.</p>
 
       {loading ? (
