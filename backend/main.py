@@ -157,10 +157,12 @@ def process_mockup_generation(mockup_id, design_content, design_filename):
     mockup_bg = cv2.bitwise_and(mockup_img, mockup_img, mask=mask_inv)
     final_result = cv2.add(mockup_bg, cv2.bitwise_and(warped_design, warped_design, mask=mask))
 
-    # Save output
-    output_filename = f"generated_{design_filename}_{config['name']}"
+    # Save output as WebP for smaller file sizes
+    base_name = os.path.splitext(design_filename)[0].replace(' ', '_')
+    config_base = os.path.splitext(config['name'])[0].replace(' ', '_')
+    output_filename = f"{base_name}_{config_base}.webp"
     output_path = os.path.join(OUTPUT_DIR, output_filename)
-    cv2.imwrite(output_path, final_result)
+    cv2.imwrite(output_path, final_result, [cv2.IMWRITE_WEBP_QUALITY, 90])
     
     return {
         "url": f"/generated/{output_filename}",
@@ -202,7 +204,7 @@ def get_generated_images():
     # Sort by modification time, newest first
     files = sorted(os.listdir(OUTPUT_DIR), key=lambda x: os.path.getmtime(os.path.join(OUTPUT_DIR, x)), reverse=True)
     for filename in files:
-        if filename.endswith(('.png', '.jpg', '.jpeg')):
+        if filename.endswith(('.png', '.jpg', '.jpeg', '.webp')):
             images.append({
                 "filename": filename,
                 "url": f"/generated/{filename}"
