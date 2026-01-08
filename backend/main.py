@@ -146,16 +146,44 @@ def process_mockup_generation(mockup_id, design_content, design_filename):
 
     # Perspective Transform
     matrix = cv2.getPerspectiveTransform(src_pts, dst_pts)
-    warped_design = cv2.warpPerspective(design_img, matrix, (mockup_img.shape[1], mockup_img.shape[0]), flags=cv2.INTER_CUBIC)
     
-    # Mask
-    mask = np.zeros(mockup_img.shape[:2], dtype=np.uint8)
-    cv2.fillConvexPoly(mask, dst_pts.astype(np.int32), 255)
+    # Warp Design
+    # Use LANCZOS4 for better resampling quality
+    # Use BORDER_REPLICATE to avoid edge darkening (dark halos) when blending
+    warped_design = cv2.warpPerspective(
+        design_img, 
+        matrix, 
+        (mockup_img.shape[1], mockup_img.shape[0]), 
+        flags=cv2.INTER_LANCZOS4, 
+        borderMode=cv2.BORDER_REPLICATE
+    )
     
-    # Blend
-    mask_inv = cv2.bitwise_not(mask)
-    mockup_bg = cv2.bitwise_and(mockup_img, mockup_img, mask=mask_inv)
-    final_result = cv2.add(mockup_bg, cv2.bitwise_and(warped_design, warped_design, mask=mask))
+    # Generate Alpha Mask
+    # Create a white image of the same size as the design to represent the alpha channel of the design plane
+    mask_src = np.ones((h_design, w_design), dtype=np.uint8) * 255
+    # Warp the mask using the same transform. This provides accurate anti-aliasing at the edges.
+    warped_mask = cv2.warpPerspective(
+        mask_src, 
+        matrix, 
+        (mockup_img.shape[1], mockup_img.shape[0]), 
+        flags=cv2.INTER_LANCZOS4, 
+        borderMode=cv2.BORDER_CONSTANT, 
+        borderValue=0
+    )
+    
+    # Alpha Blending
+    # Convert to float for accurate blending
+    bg_float = mockup_img.astype(np.float32)
+    fg_float = warped_design.astype(np.float32)
+    
+    # Normalize mask to 0-1 and expand to 3 channels
+    alpha = warped_mask.astype(np.float32) / 255.0
+    alpha = np.clip(alpha, 0, 1) # Ensure range is [0, 1] after Lanczos
+    alpha = np.dstack([alpha] * 3)
+    
+    # Standard alpha blending: Output = BG * (1 - Alpha) + FG * Alpha
+    blended = bg_float * (1.0 - alpha) + fg_float * alpha
+    final_result = np.clip(blended, 0, 255).astype(np.uint8)
 
     # Save output as WebP for smaller file sizes
     base_name = os.path.splitext(design_filename)[0].replace(' ', '_')
@@ -258,19 +286,43 @@ async def preview(
         
         # Warp
         matrix = cv2.getPerspectiveTransform(src_pts, dst_pts)
-        warped_design = cv2.warpPerspective(design_img, matrix, (mockup_img.shape[1], mockup_img.shape[0]), flags=cv2.INTER_CUBIC)
         
-        # Create Alpha Channel (Mask)
-        mask = np.zeros(mockup_img.shape[:2], dtype=np.uint8)
-        cv2.fillConvexPoly(mask, dst_pts.astype(np.int32), 255)
+        # Warped Design with better interpolation and replicated border
+        warped_design = cv2.warpPerspective(
+            design_img, 
+            matrix, 
+            (mockup_img.shape[1], mockup_img.shape[0]), 
+            flags=cv2.INTER_LANCZOS4, 
+            borderMode=cv2.BORDER_REPLICATE
+        )
         
-        # Add Alpha Channel to Warped Design
-        b, g, r = cv2.split(warped_design)
-        rgba = [b, g, r, mask]
-        warped_rgba = cv2.merge(rgba, 4)
+        # Soft Mask
+        mask_src = np.ones((h_design, w_design), dtype=np.uint8) * 255
+        warped_mask = cv2.warpPerspective(
+            mask_src, 
+            matrix, 
+            (mockup_img.shape[1], mockup_img.shape[0]), 
+            flags=cv2.INTER_LANCZOS4, 
+            borderMode=cv2.BORDER_CONSTANT, 
+            borderValue=0
+        )
         
-        # Optimize: Encode as PNG in memory
-        _, encoded_img = cv2.imencode('.png', warped_rgba)
+        # Clip mask
+        warped_mask_u8 = np.clip(warped_mask, 0, 255).astype(np.uint8)
+        
+        # Alpha Blending (Same as generation)
+        bg_float = mockup_img.astype(np.float32)
+        fg_float = warped_design.astype(np.float32)
+        
+        alpha = warped_mask.astype(np.float32) / 255.0
+        alpha = np.clip(alpha, 0, 1)
+        alpha = np.dstack([alpha] * 3)
+        
+        blended = bg_float * (1.0 - alpha) + fg_float * alpha
+        final_result = np.clip(blended, 0, 255).astype(np.uint8)
+        
+        # Encode as PNG
+        _, encoded_img = cv2.imencode('.png', final_result)
         
         return StreamingResponse(io.BytesIO(encoded_img.tobytes()), media_type="image/png")
         

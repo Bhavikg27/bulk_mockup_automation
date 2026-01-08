@@ -365,7 +365,7 @@ const Editor = () => {
                         scaleY={layout.scale}
                         x={layout.offsetX}
                         y={layout.offsetY}
-                        opacity={0.9}
+                        opacity={1}
                         listening={false}
                       />
                     )}
@@ -481,7 +481,7 @@ const Editor = () => {
                   <img
                     src={previewUrl}
                     alt="warp"
-                    className="absolute inset-0 w-full h-full object-contain mix-blend-multiply"
+                    className="absolute inset-0 w-full h-full object-contain"
                   />
                 </div>
               ) : (
