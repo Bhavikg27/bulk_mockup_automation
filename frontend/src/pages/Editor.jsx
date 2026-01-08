@@ -21,6 +21,7 @@ import {
   getPreview,
 } from "../services/api";
 import clsx from "clsx";
+import Toast from "../components/Toast";
 
 const Editor = () => {
   const { id } = useParams();
@@ -55,7 +56,7 @@ const Editor = () => {
 
   const [designs, setDesigns] = useState([]);
   const [generating, setGenerating] = useState(false);
-  const [generatedUrl, setGeneratedUrl] = useState(null);
+  const [toast, setToast] = useState(null); // { message, type }
 
   // Initial Load
   useEffect(() => {
@@ -121,7 +122,7 @@ const Editor = () => {
       navigate(`/editor/${res.filename}`, { replace: true });
     } catch (err) {
       console.error(err);
-      alert("Upload failed");
+      setToast({ message: "Upload failed", type: "error" });
     }
   };
 
@@ -216,16 +217,16 @@ const Editor = () => {
         name: mockupName,
         points: points,
       });
-      alert("Configuration saved!");
+      setToast({ message: "Configuration saved successfully!", type: "success" });
     } catch (err) {
       console.error(err);
-      alert("Failed to save config");
+      setToast({ message: "Failed to save config", type: "error" });
     }
   };
 
   const handleGenerate = async () => {
-    if (designs.length === 0) return alert("Please upload a design first");
-    if (!mockupId) return alert("No mockup selected");
+    if (designs.length === 0) return setToast({ message: "Please upload a design first", type: "error" });
+    if (!mockupId) return setToast({ message: "No mockup selected", type: "error" });
 
     setGenerating(true);
     try {
@@ -240,18 +241,19 @@ const Editor = () => {
         // Show summary
         let msg = `Generations Complete! Created ${res.count} mockups.`;
         if (res.errors && res.errors.length > 0) {
-          msg += `\nErrors: ${res.errors.length}`;
+          msg += ` (${res.errors.length} errors)`;
         }
-        alert(msg);
+        setToast({ message: msg, type: "success" });
       } else if (res.errors && res.errors.length > 0) {
-        alert(`Failed to generate: ${res.errors.join(", ")}`);
+        setToast({ message: `Failed to generate: ${res.errors.join(", ")}`, type: "error" });
       } else {
         // Fallback for single legacy response
         setGeneratedUrl(getImageUrl(res.url));
+        setToast({ message: "Mockup generated successfully!", type: "success" });
       }
     } catch (err) {
       console.error(err);
-      alert("Generation failed");
+      setToast({ message: "Generation failed", type: "error" });
     } finally {
       setGenerating(false);
     }
@@ -287,7 +289,14 @@ const Editor = () => {
   };
 
   return (
-    <div className="h-full flex flex-col gap-6">
+    <div className="h-full flex flex-col gap-6 relative">
+      {toast && (
+        <Toast
+          message={toast.message}
+          type={toast.type}
+          onClose={() => setToast(null)}
+        />
+      )}
       {/* Toolbar */}
       <div className="flex justify-between items-center bg-white/80 backdrop-blur-md p-3 rounded-lg shadow-sm border border-gray-200">
         <h2 className="font-bold text-transparent bg-clip-text bg-gradient-to-r from-primary to-blue-600">
