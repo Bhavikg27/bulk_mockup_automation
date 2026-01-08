@@ -78,17 +78,32 @@ async def upload_mockup(file: UploadFile = File(...)):
     existing = next((item for item in data["mockups"] if item["name"] == file.filename), None)
     
     if not existing:
-        # Default points (just some placeholder values, user will adjust)
-        # We might want to read image size to set better defaults, but for now...
-        default_config = {
-            "id": file.filename, # Simple ID
-            "name": file.filename,
-            "points": [
+        # Read image to determine dimensions
+        img = cv2.imread(file_path)
+        if img is not None:
+            h, w = img.shape[:2]
+            # Create a default box (50% of image size, centered)
+            margin_x = w * 0.25
+            margin_y = h * 0.25
+            default_points = [
+                {"x": margin_x, "y": margin_y},             # Top-left
+                {"x": w - margin_x, "y": margin_y},         # Top-right
+                {"x": w - margin_x, "y": h - margin_y},     # Bottom-right
+                {"x": margin_x, "y": h - margin_y}          # Bottom-left
+            ]
+        else:
+            # Fallback if image read fails
+            default_points = [
                 {"x": 100, "y": 100},
                 {"x": 300, "y": 100},
                 {"x": 300, "y": 300},
                 {"x": 100, "y": 300}
             ]
+
+        default_config = {
+            "id": file.filename,
+            "name": file.filename,
+            "points": default_points
         }
         data["mockups"].append(default_config)
         save_data(data)
