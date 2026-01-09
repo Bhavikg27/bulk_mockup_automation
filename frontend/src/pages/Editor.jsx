@@ -236,7 +236,7 @@ const Editor = () => {
       if (res.results && res.results.length > 0) {
         // Set the first one as preview
         const first = res.results[0];
-        setGeneratedUrl(getImageUrl(first.url));
+        setPreviewUrl(getImageUrl(first.url));
 
         // Show summary
         let msg = `Generations Complete! Created ${res.count} mockups.`;
@@ -248,7 +248,7 @@ const Editor = () => {
         setToast({ message: `Failed to generate: ${res.errors.join(", ")}`, type: "error" });
       } else {
         // Fallback for single legacy response
-        setGeneratedUrl(getImageUrl(res.url));
+        setPreviewUrl(getImageUrl(res.url));
         setToast({ message: "Mockup generated successfully!", type: "success" });
       }
     } catch (err) {
