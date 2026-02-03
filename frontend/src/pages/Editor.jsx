@@ -22,6 +22,7 @@ import {
 } from "../services/api";
 import clsx from "clsx";
 import Toast from "../components/Toast";
+import NamingConfig from "../components/NamingConfig";
 
 const Editor = () => {
   const { id } = useParams();
@@ -57,6 +58,7 @@ const Editor = () => {
   const [designs, setDesigns] = useState([]);
   const [generating, setGenerating] = useState(false);
   const [toast, setToast] = useState(null); // { message, type }
+  const [namingTemplate, setNamingTemplate] = useState("{poster_name}_{mockup_name}");
 
   // Initial Load
   useEffect(() => {
@@ -230,8 +232,8 @@ const Editor = () => {
 
     setGenerating(true);
     try {
-      // Bulk Generation Logic
-      const res = await generateBulkMockups(mockupId, designs);
+      // Bulk Generation Logic with naming template
+      const res = await generateBulkMockups(mockupId, designs, namingTemplate);
 
       if (res.results && res.results.length > 0) {
         // Set the first one as preview
@@ -577,6 +579,14 @@ const Editor = () => {
                     </button>
                   )}
                 </div>
+
+                {/* Naming Configuration */}
+                <NamingConfig
+                  onTemplateChange={setNamingTemplate}
+                  initialTemplate={namingTemplate}
+                  mockupName={mockupName?.replace(/\.[^/.]+$/, "") || "frame_mockup"}
+                  posterName={designs[0]?.name?.replace(/\.[^/.]+$/, "") || "my_poster"}
+                />
 
                 <button
                   onClick={handleGenerate}

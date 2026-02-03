@@ -7,7 +7,16 @@ import os
 import cv2
 import numpy as np
 import json
-from typing import List, Tuple
+from typing import List, Tuple, Optional
+
+# Import naming engine
+from naming_engine import (
+    NamingEngine, 
+    NamingConfig, 
+    ValidationResult,
+    load_naming_config, 
+    save_naming_config
+)
 
 app = FastAPI()
 
@@ -26,6 +35,7 @@ MOCKUPS_DIR = os.path.join(BASE_DIR, "..", "mockups_db") # Store uploaded mockup
 OUTPUT_DIR = os.path.join(BASE_DIR, "..", "generated_mockups")
 DESIGNS_DIR = os.path.join(BASE_DIR, "..", "designs_db")
 DATA_FILE = os.path.join(BASE_DIR, "data.json")
+NAMING_CONFIG_FILE = os.path.join(BASE_DIR, "naming_config.json")
 
 # Ensure directories exist
 os.makedirs(MOCKUPS_DIR, exist_ok=True)
@@ -125,7 +135,25 @@ async def save_config(config: MockupConfig):
     return {"message": "Configuration created"}
 
 # Helper for generation logic
-def process_mockup_generation(mockup_id, design_content, design_filename):
+def process_mockup_generation(
+    mockup_id: str, 
+    design_content: bytes, 
+    design_filename: str,
+    naming_engine: Optional[NamingEngine] = None,
+    batch_index: int = 0,
+    batch_id: Optional[str] = None
+):
+    """
+    Generate a mockup by placing a design onto a mockup template.
+    
+    Args:
+        mockup_id: ID of the mockup configuration
+        design_content: Raw bytes of the design image
+        design_filename: Original filename of the design
+        naming_engine: Optional NamingEngine for custom filenames
+        batch_index: Index in batch operation (for bulk generation)
+        batch_id: Batch identifier (for bulk generation)
+    """
     data = load_data()
     config = next((item for item in data["mockups"] if item["id"] == mockup_id), None)
     
@@ -172,9 +200,7 @@ def process_mockup_generation(mockup_id, design_content, design_filename):
     )
     
     # Generate Alpha Mask
-    # Create a white image of the same size as the design to represent the alpha channel of the design plane
     mask_src = np.ones((h_design, w_design), dtype=np.uint8) * 255
-    # Warp the mask using the same transform. This provides accurate anti-aliasing at the edges.
     warped_mask = cv2.warpPerspective(
         mask_src, 
         matrix, 
@@ -185,23 +211,37 @@ def process_mockup_generation(mockup_id, design_content, design_filename):
     )
     
     # Alpha Blending
-    # Convert to float for accurate blending
     bg_float = mockup_img.astype(np.float32)
     fg_float = warped_design.astype(np.float32)
     
-    # Normalize mask to 0-1 and expand to 3 channels
     alpha = warped_mask.astype(np.float32) / 255.0
-    alpha = np.clip(alpha, 0, 1) # Ensure range is [0, 1] after Lanczos
+    alpha = np.clip(alpha, 0, 1)
     alpha = np.dstack([alpha] * 3)
     
-    # Standard alpha blending: Output = BG * (1 - Alpha) + FG * Alpha
     blended = bg_float * (1.0 - alpha) + fg_float * alpha
     final_result = np.clip(blended, 0, 255).astype(np.uint8)
 
-    # Save output as WebP for smaller file sizes
-    base_name = os.path.splitext(design_filename)[0].replace(' ', '_')
-    config_base = os.path.splitext(config['name'])[0].replace(' ', '_')
-    output_filename = f"{base_name}_{config_base}.webp"
+    # Generate filename using naming engine or fallback to default
+    if naming_engine:
+        output_filename = naming_engine.generate_filename(
+            poster_content=design_content,
+            poster_filename=design_filename,
+            mockup_path=mockup_path,
+            mockup_name=config['name'],
+            batch_index=batch_index,
+            batch_id=batch_id
+        )
+    else:
+        # Fallback to simple naming with number padding
+        import re
+        def pad_single_digits(text):
+            return re.sub(r'(?<!\d)(\d)(?!\d)', r'0\1', text)
+        base_name = os.path.splitext(design_filename)[0].replace(' ', '_')
+        config_base = os.path.splitext(config['name'])[0].replace(' ', '_')
+        base_name = pad_single_digits(base_name)
+        config_base = pad_single_digits(config_base)
+        output_filename = f"{base_name}_{config_base}.webp"
+    
     output_path = os.path.join(OUTPUT_DIR, output_filename)
     cv2.imwrite(output_path, final_result, [cv2.IMWRITE_WEBP_QUALITY, 90])
     
@@ -210,25 +250,63 @@ def process_mockup_generation(mockup_id, design_content, design_filename):
         "filename": output_filename
     }
 
+
 @app.post("/generate")
-async def generate(mockup_id: str = Form(...), design: UploadFile = File(...)):
+async def generate(
+    mockup_id: str = Form(...), 
+    design: UploadFile = File(...),
+    naming_template: Optional[str] = Form(None)
+):
+    """Generate a single mockup with optional custom naming template."""
     try:
         content = await design.read()
-        return process_mockup_generation(mockup_id, content, design.filename)
+        
+        # Set up naming engine if custom template provided
+        naming_engine = None
+        if naming_template:
+            naming_config = load_naming_config(NAMING_CONFIG_FILE)
+            naming_config.template = naming_template
+            naming_engine = NamingEngine(naming_config)
+        
+        return process_mockup_generation(mockup_id, content, design.filename, naming_engine)
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.post("/generate-bulk")
-async def generate_bulk(mockup_id: str = Form(...), designs: List[UploadFile] = File(...)):
+async def generate_bulk(
+    mockup_id: str = Form(...), 
+    designs: List[UploadFile] = File(...),
+    naming_template: Optional[str] = Form(None)
+):
+    """Generate multiple mockups with optional custom naming template and collision handling."""
     results = []
     errors = []
     
-    for design in designs:
+    # Set up naming engine for consistent naming across batch
+    naming_config = load_naming_config(NAMING_CONFIG_FILE)
+    if naming_template:
+        naming_config.template = naming_template
+    naming_engine = NamingEngine(naming_config)
+    naming_engine.reset_batch()  # Clear any previous batch state
+    
+    # Generate unique batch ID for this operation
+    import hashlib
+    from datetime import datetime
+    batch_id = hashlib.md5(str(datetime.now().timestamp()).encode()).hexdigest()[:6]
+    
+    for index, design in enumerate(designs):
         try:
             content = await design.read()
-            res = process_mockup_generation(mockup_id, content, design.filename)
+            res = process_mockup_generation(
+                mockup_id, 
+                content, 
+                design.filename,
+                naming_engine=naming_engine,
+                batch_index=index,
+                batch_id=batch_id
+            )
             results.append(res)
         except Exception as e:
             errors.append(f"Failed {design.filename}: {str(e)}")
@@ -236,7 +314,8 @@ async def generate_bulk(mockup_id: str = Form(...), designs: List[UploadFile] = 
     return {
         "results": results,
         "errors": errors,
-        "count": len(results)
+        "count": len(results),
+        "batch_id": batch_id
     }
 
 @app.get("/generated-images")
@@ -251,6 +330,57 @@ def get_generated_images():
                 "url": f"/generated/{filename}"
             })
     return images
+
+
+# ============================================================================
+# Naming Configuration Endpoints
+# ============================================================================
+
+@app.get("/naming-config")
+def get_naming_config_endpoint():
+    """Get the current naming configuration."""
+    config = load_naming_config(NAMING_CONFIG_FILE)
+    engine = NamingEngine(config)
+    return {
+        "config": config.model_dump(),
+        "available_placeholders": engine.get_available_placeholders()
+    }
+
+@app.post("/naming-config")
+def save_naming_config_endpoint(config: NamingConfig):
+    """Save a new naming configuration."""
+    # Validate the template first
+    engine = NamingEngine(config)
+    validation = engine.validate_template(config.template)
+    if not validation.valid:
+        raise HTTPException(status_code=400, detail=validation.message)
+    
+    save_naming_config(config, NAMING_CONFIG_FILE)
+    return {"message": "Naming configuration saved", "config": config.model_dump()}
+
+@app.post("/validate-naming-template")
+def validate_naming_template(template: str = Form(...)):
+    """Validate a naming template and return details about placeholders."""
+    engine = NamingEngine()
+    result = engine.validate_template(template)
+    return result.model_dump()
+
+@app.get("/naming-preview")
+def preview_naming(
+    template: str = "{poster_name}_{mockup_name}",
+    poster_name: str = "my_poster",
+    mockup_name: str = "frame_mockup"
+):
+    """Preview what a filename would look like with the given template."""
+    config = load_naming_config(NAMING_CONFIG_FILE)
+    config.template = template
+    engine = NamingEngine(config)
+    preview = engine.preview_filename(template, poster_name, mockup_name)
+    return {
+        "preview": preview,
+        "template": template
+    }
+
 
 from fastapi.responses import StreamingResponse
 import io

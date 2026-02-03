@@ -23,10 +23,13 @@ export const saveConfig = async (config) => {
     return response.data;
 };
 
-export const generateMockup = async (mockupId, designFile) => {
+export const generateMockup = async (mockupId, designFile, namingTemplate = null) => {
     const formData = new FormData();
     formData.append('mockup_id', mockupId);
     formData.append('design', designFile);
+    if (namingTemplate) {
+        formData.append('naming_template', namingTemplate);
+    }
     const response = await api.post('/generate', formData);
     return response.data;
 };
@@ -53,12 +56,16 @@ export const getPreview = async (mockupId, designFile, points) => {
     return URL.createObjectURL(response.data);
 };
 
-export const generateBulkMockups = async (mockupId, designFiles) => {
+export const generateBulkMockups = async (mockupId, designFiles, namingTemplate = null) => {
     const formData = new FormData();
     formData.append('mockup_id', mockupId);
     // Append each file with same key 'designs'
     for (let i = 0; i < designFiles.length; i++) {
         formData.append('designs', designFiles[i]);
+    }
+    // Add naming template if provided
+    if (namingTemplate) {
+        formData.append('naming_template', namingTemplate);
     }
     
     // Increase timeout for bulk ops
