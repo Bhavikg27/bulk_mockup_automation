@@ -242,8 +242,40 @@ def process_mockup_generation(
         config_base = pad_single_digits(config_base)
         output_filename = f"{base_name}_{config_base}.webp"
     
+    # Helper to save under 100KB
+    def save_webp_under_limit(image, path, max_size=100*1024):
+        quality = 90
+        scale = 1.0
+        current_img = image.copy()
+        
+        while True:
+            # Encode
+            _, buf = cv2.imencode('.webp', current_img, [cv2.IMWRITE_WEBP_QUALITY, quality])
+            
+            # Check size
+            if len(buf) <= max_size:
+                with open(path, "wb") as f:
+                    f.write(buf)
+                return
+            
+            # Reduce quality or resize
+            quality -= 10
+            if quality < 10:
+                # Quality too low, resize instead
+                scale *= 0.9
+                h, w = current_img.shape[:2]
+                new_h, new_w = int(h * 0.9), int(w * 0.9)
+                if new_h < 50 or new_w < 50:
+                    # Too small, just save whatever we have or break
+                    # Saving last attempt
+                    with open(path, "wb") as f:
+                        f.write(buf)
+                    return
+                current_img = cv2.resize(current_img, (new_w, new_h), interpolation=cv2.INTER_AREA)
+                quality = 80 # Reset quality for new size
+            
     output_path = os.path.join(OUTPUT_DIR, output_filename)
-    cv2.imwrite(output_path, final_result, [cv2.IMWRITE_WEBP_QUALITY, 90])
+    save_webp_under_limit(final_result, output_path)
     
     return {
         "url": f"/generated/{output_filename}",
