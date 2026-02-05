@@ -48,7 +48,7 @@ export const getPreview = async (mockupId, designFile, points) => {
     formData.append('mockup_id', mockupId);
     formData.append('design', designFile);
     formData.append('points', JSON.stringify(points));
-    
+
     // We expect a blob (image) back
     const response = await api.post('/preview', formData, {
         responseType: 'blob'
@@ -67,10 +67,16 @@ export const generateBulkMockups = async (mockupId, designFiles, namingTemplate 
     if (namingTemplate) {
         formData.append('naming_template', namingTemplate);
     }
-    
-    // Increase timeout for bulk ops
+
+    // Increase timeout for bulk ops and track upload
     const response = await api.post('/generate-bulk', formData, {
-        timeout: 60000 
+        timeout: 300000, // 5 minutes
+        onUploadProgress: (progressEvent) => {
+            if (namingTemplate?.onProgress) {
+                const percentCompleted = Math.round((progressEvent.loaded * 100) / progressEvent.total);
+                namingTemplate.onProgress(percentCompleted);
+            }
+        }
     });
     return response.data;
 };

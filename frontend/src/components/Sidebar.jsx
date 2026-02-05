@@ -26,10 +26,10 @@ const Sidebar = () => {
             to={item.path}
             className={({ isActive }) =>
               clsx(
-                'flex items-center px-4 py-3 rounded-lg text-sm font-medium transition-all duration-300 border border-transparent',
+                'flex items-center px-4 py-3 rounded-xl text-sm font-medium transition-all duration-300 border border-transparent mx-2 my-1',
                 isActive
-                  ? 'bg-primary/10 text-primary border-primary/20 shadow-[0_0_15px_rgba(6,182,212,0.15)]'
-                  : 'text-slate-400 hover:bg-white/5 hover:text-white hover:border-white/5'
+                  ? 'bg-primary/10 text-primary border-primary/20 shadow-neon'
+                  : 'text-zinc-400 hover:bg-white/5 hover:text-white hover:border-white/5'
               )
             }
           >

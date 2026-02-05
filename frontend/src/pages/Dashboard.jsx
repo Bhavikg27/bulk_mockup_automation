@@ -24,61 +24,66 @@ const Dashboard = () => {
 
   return (
     <div>
-      <div className="flex justify-between items-center mb-8">
-        <div>
-          <h1 className="text-3xl font-bold text-white tracking-tight">Dashboard</h1>
-          <p className="text-slate-400 mt-1">Manage your mockup templates.</p>
+      <div className="flex justify-between items-end mb-12">
+        <div className="relative">
+          <div className="absolute -left-4 -top-4 w-20 h-20 bg-primary/20 rounded-full blur-2xl opacity-50 animate-pulse-glow"></div>
+          <h1 className="text-5xl font-display font-bold text-white tracking-tight relative z-10">
+            Dashboard
+            <span className="text-primary">.</span>
+          </h1>
+          <p className="text-muted mt-2 text-lg relative z-10 font-light">Manage your mockup templates with style.</p>
         </div>
-        <Link 
+        <Link
           to="/editor/new"
-          className="bg-primary hover:bg-cyan-400 text-white px-5 py-2.5 rounded-lg flex items-center transition-all shadow-[0_0_20px_rgba(6,182,212,0.3)] hover:shadow-[0_0_25px_rgba(6,182,212,0.5)] font-medium"
+          className="btn-primary flex items-center group"
         >
-          <Plus className="w-5 h-5 mr-2" />
+          <Plus className="w-5 h-5 mr-2 group-hover:rotate-90 transition-transform duration-300" />
           New Mockup
         </Link>
       </div>
 
       {loading ? (
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
           {[1, 2, 3].map((n) => (
-            <div key={n} className="h-72 bg-slate-800/50 rounded-xl animate-pulse border border-white/5"></div>
+            <div key={n} className="h-80 bg-zinc-800/30 rounded-2xl animate-pulse border border-white/5"></div>
           ))}
         </div>
       ) : mockups.length === 0 ? (
-        <div className="text-center py-20 bg-slate-900/50 backdrop-blur border border-dashed border-slate-700 rounded-xl">
-          <h3 className="text-lg font-medium text-white">No mockups yet</h3>
-          <p className="text-slate-500 mt-1">Upload a base image to get started.</p>
+        <div className="text-center py-32 bg-zinc-900/30 backdrop-blur-sm border border-dashed border-zinc-700 rounded-3xl">
+          <h3 className="text-xl font-display font-medium text-white">No mockups yet</h3>
+          <p className="text-muted mt-2">Upload a base image to get started.</p>
         </div>
       ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {mockups.map((mockup) => (
-            <div key={mockup.id} className="glass-panel rounded-xl overflow-hidden hover:border-primary/30 transition-all duration-300 group relative">
-              <div className="h-48 overflow-hidden relative">
-                <img 
-                  src={getImageUrl(`/mockups/${mockup.name}`)} 
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
+          {mockups.map((mockup, index) => (
+            <div
+              key={mockup.id}
+              className="glass-panel rounded-2xl overflow-hidden hover:border-primary/50 transition-all duration-300 group relative shadow-lg hover:shadow-neon/20 animate-fade-in"
+              style={{ animationDelay: `${index * 50}ms` }}
+            >
+              <div className="h-64 overflow-hidden relative">
+                <img
+                  src={getImageUrl(`/mockups/${mockup.name}`)}
                   alt={mockup.name}
-                  className="w-full h-full object-cover transform group-hover:scale-105 transition-transform duration-700" 
+                  className="w-full h-full object-cover transform group-hover:scale-110 transition-transform duration-700 ease-out"
                 />
-                <div className="absolute inset-0 bg-black/0 group-hover:bg-black/40 transition-colors duration-300" />
-                 <Link 
-                    to={`/editor/${mockup.id}`}
-                    className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity duration-300"
-                 >
-                    <span className="bg-black/50 backdrop-blur-md text-white px-6 py-2 rounded-full border border-white/20 hover:bg-primary hover:border-primary transition-colors font-medium">
-                        Configure
-                    </span>
-                 </Link>
+                <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
+                <Link
+                  to={`/editor/${mockup.id}`}
+                  className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-all duration-300 translate-y-4 group-hover:translate-y-0"
+                >
+                  <span className="bg-white/10 backdrop-blur-md text-white px-8 py-3 rounded-full border border-white/20 hover:bg-primary hover:border-primary transition-all duration-300 font-medium shadow-xl hover:shadow-primary/50">
+                    Configure
+                  </span>
+                </Link>
               </div>
-              <div className="p-5">
-                <h3 className="font-semibold text-lg text-white truncate group-hover:text-primary transition-colors" title={mockup.name}>{mockup.name}</h3>
-                <div className="mt-4 flex justify-between items-center border-t border-white/5 pt-4">
-                   <div className="text-xs text-slate-500 font-mono">ID: {mockup.id.substring(0,8)}...</div>
-                   <Link 
-                    to={`/editor/${mockup.id}`}
-                    className="text-sm font-medium text-slate-400 hover:text-white flex items-center transition-colors"
-                   >
-                     Edit <ArrowRight className="w-4 h-4 ml-1" />
-                   </Link>
+              <div className="p-6 relative">
+                <div className="absolute -top-10 right-4 w-12 h-12 bg-zinc-900 rounded-full flex items-center justify-center border border-white/10 shadow-xl opacity-0 group-hover:opacity-100 transition-all duration-500 translate-y-4 group-hover:translate-y-0 delay-75 pointer-events-none">
+                  <ArrowRight className="w-5 h-5 text-primary" />
+                </div>
+                <h3 className="font-display font-bold text-xl text-white truncate group-hover:text-primary transition-colors" title={mockup.name}>{mockup.name}</h3>
+                <div className="mt-4 flex justify-between items-center pt-4 border-t border-white/5">
+                  <div className="text-xs text-muted font-mono tracking-wider">ID: {mockup.id.substring(0, 8)}...</div>
                 </div>
               </div>
             </div>

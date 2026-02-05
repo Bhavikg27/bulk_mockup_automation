@@ -23,6 +23,7 @@ import {
 import clsx from "clsx";
 import Toast from "../components/Toast";
 import NamingConfig from "../components/NamingConfig";
+import ProgressBar from "../components/ProgressBar";
 
 const Editor = () => {
   const { id } = useParams();
@@ -59,6 +60,7 @@ const Editor = () => {
   const [generating, setGenerating] = useState(false);
   const [toast, setToast] = useState(null); // { message, type }
   const [namingTemplate, setNamingTemplate] = useState("{poster_name}_{mockup_name}");
+  const [progress, setProgress] = useState(0);
 
   // Initial Load
   useEffect(() => {
@@ -231,9 +233,12 @@ const Editor = () => {
     if (!mockupId) return setToast({ message: "No mockup selected", type: "error" });
 
     setGenerating(true);
+    setProgress(0);
     try {
       // Bulk Generation Logic with naming template
-      const res = await generateBulkMockups(mockupId, designs, namingTemplate);
+      const res = await generateBulkMockups(mockupId, designs, namingTemplate, (percent) => {
+        setProgress(percent);
+      });
 
       if (res.results && res.results.length > 0) {
         // Set the first one as preview
@@ -420,8 +425,8 @@ const Editor = () => {
                           e.cancelBubble = true;
                         }}
                         onDragMove={(e) => {
-                            e.cancelBubble = true;
-                            handleDragMove(i, e);
+                          e.cancelBubble = true;
+                          handleDragMove(i, e);
                         }}
                         onDragEnd={(e) => {
                           e.cancelBubble = true;
@@ -588,6 +593,16 @@ const Editor = () => {
                   posterName={designs[0]?.name?.replace(/\.[^/.]+$/, "") || "my_poster"}
                 />
 
+                {generating && (
+                  <div className="mb-4">
+                    <div className="flex justify-between text-xs mb-1 text-gray-500">
+                      <span>Uploading & Processing...</span>
+                      <span>{progress}%</span>
+                    </div>
+                    <ProgressBar progress={progress} />
+                  </div>
+                )}
+
                 <button
                   onClick={handleGenerate}
                   disabled={generating || designs.length === 0}
@@ -595,9 +610,8 @@ const Editor = () => {
                 >
                   {generating
                     ? "Processing..."
-                    : `Generate ${
-                        designs.length > 1 ? "All " + designs.length : "Mockup"
-                      }`}
+                    : `Generate ${designs.length > 1 ? "All " + designs.length : "Mockup"
+                    }`}
                 </button>
               </div>
             </div>
