@@ -1,8 +1,13 @@
 designs
 designs_db
 generated_mockups
+thumbs
+exports
+temp
+backend/*.sqlite3
 backend/__pycache__
 .agents
 .claude
 .codex
 .opencode
+.continue

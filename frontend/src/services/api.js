@@ -38,6 +38,10 @@ export const getImageUrl = (path) => {
     return `${API_URL}${path}`;
 }
 
+export const getExportZipUrl = (jobId) => {
+    return `${API_URL}/api/exports/${jobId}/download`;
+};
+
 export const getGeneratedImages = async () => {
     const response = await api.get('/generated-images');
     return response.data;
@@ -56,29 +60,61 @@ export const getPreview = async (mockupId, designFile, points) => {
     return URL.createObjectURL(response.data);
 };
 
-export const generateBulkMockups = async (mockupId, designFiles, namingTemplate = null) => {
+export const createMockupJob = async (mockupId, designFiles, namingTemplate = null, targetKb = 100) => {
     const formData = new FormData();
     formData.append('mockup_id', mockupId);
-    // Append each file with same key 'designs'
+    formData.append('target_kb', String(targetKb));
     for (let i = 0; i < designFiles.length; i++) {
         formData.append('designs', designFiles[i]);
     }
-    // Add naming template if provided
     if (namingTemplate) {
         formData.append('naming_template', namingTemplate);
     }
 
-    // Increase timeout for bulk ops and track upload
-    const response = await api.post('/generate-bulk', formData, {
-        timeout: 300000, // 5 minutes
-        onUploadProgress: (progressEvent) => {
-            if (namingTemplate?.onProgress) {
-                const percentCompleted = Math.round((progressEvent.loaded * 100) / progressEvent.total);
-                namingTemplate.onProgress(percentCompleted);
-            }
-        }
-    });
+    const response = await api.post('/api/jobs/mockup-batch', formData, { timeout: 300000 });
     return response.data;
+};
+
+export const createOptimizerJob = async (imageFiles, options = {}) => {
+    const formData = new FormData();
+    formData.append('target_kb', String(options.targetKb ?? 100));
+    formData.append('quality', String(options.quality ?? 90));
+    if (options.maxWidth) formData.append('max_width', String(options.maxWidth));
+    if (options.maxHeight) formData.append('max_height', String(options.maxHeight));
+    for (let i = 0; i < imageFiles.length; i++) {
+        formData.append('images', imageFiles[i]);
+    }
+
+    const response = await api.post('/api/jobs/optimize-batch', formData, { timeout: 300000 });
+    return response.data;
+};
+
+export const generateBulkMockups = createMockupJob;
+
+export const getJob = async (jobId) => {
+    const response = await api.get(`/api/jobs/${jobId}`);
+    return response.data;
+};
+
+export const getJobs = async (limit = 20) => {
+    const response = await api.get('/api/jobs', { params: { limit } });
+    return response.data;
+};
+
+export const cancelJob = async (jobId) => {
+    const response = await api.post(`/api/jobs/${jobId}/cancel`);
+    return response.data;
+};
+
+export const subscribeToJob = (jobId, onMessage, onError) => {
+    const source = new EventSource(`${API_URL}/api/jobs/${jobId}/events`);
+    source.onmessage = (event) => {
+        onMessage(JSON.parse(event.data));
+    };
+    source.onerror = (event) => {
+        if (onError) onError(event);
+    };
+    return source;
 };
 
 export default api;

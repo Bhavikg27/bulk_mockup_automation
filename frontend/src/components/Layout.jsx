@@ -1,23 +1,14 @@
 import React from 'react';
 import Sidebar from './Sidebar';
-import { Outlet, useLocation } from 'react-router-dom';
-// import { AnimatePresence, motion } from 'framer-motion';
+import { Outlet } from 'react-router-dom';
 
 const Layout = () => {
-  const location = useLocation();
-
   return (
-    <div className="flex h-screen overflow-hidden bg-background text-zinc-100 selection:bg-primary/30 font-sans relative">
-      {/* Ambient Background */}
-      <div className="fixed inset-0 pointer-events-none z-0">
-        <div className="absolute top-[-10%] left-[-10%] w-[500px] h-[500px] bg-primary/20 rounded-full blur-[120px] animate-float opacity-40"></div>
-        <div className="absolute bottom-[-10%] right-[-10%] w-[500px] h-[500px] bg-secondary/20 rounded-full blur-[120px] animate-float opacity-40 delay-1000"></div>
-      </div>
-
+    <div className="relative flex h-dvh overflow-hidden bg-[#ECE9E0] font-sans text-[#454036] selection:bg-[#DBD1C0]">
       <Sidebar />
 
-      <main className="flex-1 overflow-y-auto relative z-10 scroll-smooth">
-        <div className="p-8 max-w-7xl mx-auto h-full min-h-screen">
+      <main className="relative z-10 flex-1 overflow-y-auto scroll-smooth">
+        <div className="mx-auto h-full min-h-dvh max-w-7xl p-6 lg:p-8">
           <div className="h-full">
             <Outlet />
           </div>

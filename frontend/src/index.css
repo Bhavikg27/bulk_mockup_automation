@@ -1,14 +1,14 @@
-@import url('https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&family=Space+Grotesk:wght@300;400;500;600;700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
 @import "tailwindcss";
 
 @theme {
-  --color-primary: #8b5cf6;
-  --color-secondary: #06b6d4;
-  --color-accent: #f43f5e;
+  --color-primary: #5E6AD2;
+  --color-secondary: #0F0F10;
+  --color-accent: #D92D20;
 
-  --color-canvas: #09090b;
-  --color-surface: #18181b;
-  --color-surface-highlight: #27272a;
+  --color-canvas: #ECE9E0;
+  --color-surface: #DBD1C0;
+  --color-surface-highlight: #F7F4EC;
 
   /* Animations - Simplified for performance */
   --animate-float: none;
@@ -68,20 +68,11 @@
 
 body {
   background-color: var(--color-canvas);
-  color: #f4f4f5;
-  font-family: 'Outfit', sans-serif;
+  color: #454036;
+  font-family: 'Inter', sans-serif;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   overflow-x: hidden;
-}
-
-h1,
-h2,
-h3,
-h4,
-h5,
-h6 {
-  font-family: 'Space Grotesk', sans-serif;
 }
 
 /* Custom Scrollbar */
@@ -91,32 +82,31 @@ h6 {
 }
 
 ::-webkit-scrollbar-track {
-  background: var(--color-canvas);
+  background: #ECE9E0;
 }
 
 ::-webkit-scrollbar-thumb {
-  background: #3f3f46;
+  background: #9F9F9C;
   border-radius: 4px;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: #52525b;
+  background: #625F59;
 }
 
 /* Premium Utilities */
 .glass-panel {
-  @apply bg-zinc-900/40 backdrop-blur-xl border border-white/10 shadow-lg;
+  @apply bg-[#DBD1C0] border border-stone-300 shadow-sm;
 }
 
 .text-gradient {
-  @apply bg-clip-text text-transparent bg-gradient-to-r from-primary to-secondary;
+  @apply text-[#201F1D];
 }
 
 .btn-primary {
-  @apply bg-primary text-white rounded-lg px-5 py-2.5 font-medium transition-all duration-300 hover:scale-[1.02] active:scale-[0.98];
-  box-shadow: 0 0 20px rgba(139, 92, 246, 0.3);
+  @apply rounded-[3px] bg-[#0F0F10] px-5 py-2.5 font-medium text-white transition-colors duration-150 hover:bg-[#2A2927] active:scale-[0.99];
 }
 
 .btn-primary:hover {
-  box-shadow: 0 0 30px rgba(139, 92, 246, 0.5);
+  box-shadow: none;
 }

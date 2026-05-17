@@ -9,8 +9,8 @@ for /f "tokens=5" %%a in ('netstat -aon ^| find ":5173" ^| find "LISTENING"') do
 
 echo Starting Mockup Generator...
 
-:: Start Backend
-start cmd /k "cd backend && python -m uvicorn main:app --reload --port 8000"
+:: Start Backend from project root so generated folders stay writable
+start cmd /k "python -m uvicorn backend.main:app --reload --port 8000"
 
 :: Wait a moment for backend
 timeout /t 3 /nobreak >nul

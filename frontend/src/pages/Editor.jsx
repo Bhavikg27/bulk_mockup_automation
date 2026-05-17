@@ -7,23 +7,23 @@ import {
   Save,
   Play,
   Layers,
-  Check,
   RefreshCw,
   Columns,
 } from "lucide-react";
 import {
   uploadMockup,
   saveConfig,
-  generateMockup,
-  generateBulkMockups,
+  createMockupJob,
   getMockups,
   getImageUrl,
   getPreview,
+  subscribeToJob,
 } from "../services/api";
 import clsx from "clsx";
 import Toast from "../components/Toast";
 import NamingConfig from "../components/NamingConfig";
 import ProgressBar from "../components/ProgressBar";
+import LiveJobPanel from "../components/LiveJobPanel";
 
 const Editor = () => {
   const { id } = useParams();
@@ -61,13 +61,37 @@ const Editor = () => {
   const [toast, setToast] = useState(null); // { message, type }
   const [namingTemplate, setNamingTemplate] = useState("{poster_name}_{mockup_name}");
   const [progress, setProgress] = useState(0);
+  const [targetKb, setTargetKb] = useState(100);
+  const [currentJob, setCurrentJob] = useState(null);
+  const jobSourceRef = useRef(null);
 
   // Initial Load
   useEffect(() => {
+    const loadMockup = async (mid) => {
+      const allMockups = await getMockups();
+      const config = allMockups.find((m) => m.id === mid);
+      if (config) {
+        setMockupId(config.id);
+        setMockupName(config.name);
+        setImageUrl(getImageUrl(`/mockups/${config.name}`));
+        if (config.points && config.points.length === 4) {
+          setPoints(config.points);
+        }
+      }
+    };
+
     if (id && id !== "new") {
       loadMockup(id);
     }
   }, [id]);
+
+  useEffect(() => {
+    return () => {
+      if (jobSourceRef.current) {
+        jobSourceRef.current.close();
+      }
+    };
+  }, []);
 
   // Handle resizing & Layout Calculation
   useEffect(() => {
@@ -100,19 +124,6 @@ const Editor = () => {
     window.addEventListener("resize", updateLayout);
     return () => window.removeEventListener("resize", updateLayout);
   }, [image]);
-
-  const loadMockup = async (mid) => {
-    const allMockups = await getMockups();
-    const config = allMockups.find((m) => m.id === mid);
-    if (config) {
-      setMockupId(config.id);
-      setMockupName(config.name);
-      setImageUrl(getImageUrl(`/mockups/${config.name}`));
-      if (config.points && config.points.length === 4) {
-        setPoints(config.points);
-      }
-    }
-  };
 
   const handleFileUpload = async (e) => {
     const file = e.target.files[0];
@@ -234,34 +245,50 @@ const Editor = () => {
 
     setGenerating(true);
     setProgress(0);
+    setCurrentJob(null);
+    if (jobSourceRef.current) {
+      jobSourceRef.current.close();
+      jobSourceRef.current = null;
+    }
+
     try {
-      // Bulk Generation Logic with naming template
-      const res = await generateBulkMockups(mockupId, designs, namingTemplate, (percent) => {
-        setProgress(percent);
-      });
+      const res = await createMockupJob(mockupId, designs, namingTemplate, targetKb);
+      setCurrentJob(res.job);
+      setToast({ message: "Batch started. Live queue is tracking real backend progress.", type: "success" });
 
-      if (res.results && res.results.length > 0) {
-        // Set the first one as preview
-        const first = res.results[0];
-        setPreviewUrl(getImageUrl(first.url));
+      jobSourceRef.current = subscribeToJob(
+        res.job_id,
+        (job) => {
+          setCurrentJob(job);
+          setProgress(job.percent || 0);
 
-        // Show summary
-        let msg = `Generations Complete! Created ${res.count} mockups.`;
-        if (res.errors && res.errors.length > 0) {
-          msg += ` (${res.errors.length} errors)`;
+          const firstDone = job.items?.find((item) => item.status === "done" && item.output_url);
+          if (firstDone) {
+            setPreviewUrl(getImageUrl(firstDone.output_url));
+          }
+
+          if (["completed", "completed_with_errors", "failed", "canceled"].includes(job.status)) {
+            setGenerating(false);
+            if (jobSourceRef.current) {
+              jobSourceRef.current.close();
+              jobSourceRef.current = null;
+            }
+            const done = job.completed || 0;
+            const failed = job.failed || 0;
+            if (job.status === "completed" || job.status === "completed_with_errors") {
+              setToast({ message: `Batch complete: ${done} done, ${failed} failed.`, type: failed ? "error" : "success" });
+            } else {
+              setToast({ message: `Batch ${job.status}.`, type: "error" });
+            }
+          }
+        },
+        () => {
+          setToast({ message: "Live progress disconnected. Refresh job status from gallery.", type: "error" });
         }
-        setToast({ message: msg, type: "success" });
-      } else if (res.errors && res.errors.length > 0) {
-        setToast({ message: `Failed to generate: ${res.errors.join(", ")}`, type: "error" });
-      } else {
-        // Fallback for single legacy response
-        setPreviewUrl(getImageUrl(res.url));
-        setToast({ message: "Mockup generated successfully!", type: "success" });
-      }
+      );
     } catch (err) {
       console.error(err);
       setToast({ message: "Generation failed", type: "error" });
-    } finally {
       setGenerating(false);
     }
   };
@@ -593,10 +620,27 @@ const Editor = () => {
                   posterName={designs[0]?.name?.replace(/\.[^/.]+$/, "") || "my_poster"}
                 />
 
+                <div>
+                  <label className="mb-2 flex items-center justify-between text-sm font-medium text-gray-700">
+                    Target size
+                    <span className="font-mono text-xs text-gray-500">{targetKb} KB</span>
+                  </label>
+                  <input
+                    type="range"
+                    min="40"
+                    max="400"
+                    step="10"
+                    value={targetKb}
+                    onChange={(e) => setTargetKb(Number(e.target.value))}
+                    className="w-full accent-primary"
+                    disabled={generating}
+                  />
+                </div>
+
                 {generating && (
                   <div className="mb-4">
                     <div className="flex justify-between text-xs mb-1 text-gray-500">
-                      <span>Uploading & Processing...</span>
+                      <span>{currentJob?.stage || "Starting job..."}</span>
                       <span>{progress}%</span>
                     </div>
                     <ProgressBar progress={progress} />
@@ -615,6 +659,12 @@ const Editor = () => {
                 </button>
               </div>
             </div>
+
+            <LiveJobPanel
+              job={currentJob}
+              onJobUpdate={setCurrentJob}
+              onDone={() => navigate("/gallery")}
+            />
 
             {/* Instructions */}
             <div className="bg-blue-50 p-4 rounded-xl border border-blue-100">

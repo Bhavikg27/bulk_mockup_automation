@@ -1,22 +1,23 @@
 import React from 'react';
 import { NavLink } from 'react-router-dom';
-import { LayoutDashboard, PlusCircle, Image as ImageIcon } from 'lucide-react';
+import { LayoutDashboard, PlusCircle, Image as ImageIcon, Sparkles } from 'lucide-react';
 import { clsx } from 'clsx';
 
 const Sidebar = () => {
   const navItems = [
     { name: 'Dashboard', path: '/', icon: LayoutDashboard },
     { name: 'New Mockup', path: '/editor/new', icon: PlusCircle },
+    { name: 'Optimizer', path: '/optimizer', icon: Sparkles },
     { name: 'Gallery', path: '/gallery', icon: ImageIcon },
   ];
 
   return (
-    <div className="h-screen w-64 bg-slate-900/50 backdrop-blur-xl border-r border-white/5 flex flex-col shadow-2xl relative z-10">
-      <div className="p-6 border-b border-white/5">
-        <h1 className="text-2xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-primary to-blue-400 drop-shadow-sm">
+    <div className="relative z-10 flex h-dvh w-64 flex-col border-r border-stone-300 bg-[#DBD1C0] text-[#454036] shadow-sm">
+      <div className="border-b border-stone-300 p-5">
+        <h1 className="text-2xl font-bold text-[#201F1D]">
           MockupGen
         </h1>
-        <p className="text-xs text-slate-500 mt-1 uppercase tracking-wider font-semibold">Premium Studio</p>
+        <p className="mt-1 text-xs font-semibold uppercase tracking-wide text-[#625F59]">Production Studio</p>
       </div>
 
       <nav className="flex-1 p-4 space-y-2">
@@ -26,10 +27,10 @@ const Sidebar = () => {
             to={item.path}
             className={({ isActive }) =>
               clsx(
-                'flex items-center px-4 py-3 rounded-xl text-sm font-medium transition-all duration-300 border border-transparent mx-2 my-1',
+                'mx-2 my-1 flex items-center rounded-[3px] border border-transparent px-4 py-3 text-sm font-medium transition-colors',
                 isActive
-                  ? 'bg-primary/10 text-primary border-primary/20 shadow-neon'
-                  : 'text-zinc-400 hover:bg-white/5 hover:text-white hover:border-white/5'
+                  ? 'border-stone-500 bg-[#0F0F10] text-white'
+                  : 'text-[#625F59] hover:border-stone-300 hover:bg-[#ECE9E0] hover:text-[#201F1D]'
               )
             }
           >
@@ -39,13 +40,10 @@ const Sidebar = () => {
         ))}
       </nav>
 
-      <div className="p-4 border-t border-white/5">
-        <div className="bg-gradient-to-br from-indigo-900/50 to-slate-900/50 backdrop-blur border border-white/10 rounded-lg p-4 text-white relative overflow-hidden group">
-          <div className="absolute top-0 right-0 p-2 opacity-10 group-hover:opacity-20 transition-opacity">
-            <LayoutDashboard className="w-12 h-12" />
-          </div>
-          <p className="text-xs font-bold text-primary mb-1 uppercase tracking-wider">Pro Tip</p>
-          <p className="text-xs text-slate-300 leading-relaxed">Drag dots to adjust perspective perfectly.</p>
+      <div className="border-t border-stone-300 p-4">
+        <div className="rounded-[15px] border border-stone-300 bg-[#ECE9E0] p-4">
+          <p className="mb-1 text-xs font-bold uppercase tracking-wide text-[#625F59]">Live feedback</p>
+          <p className="text-xs leading-relaxed text-[#454036]">Bulk jobs now report backend stage, file, and real percent.</p>
         </div>
       </div>
     </div>

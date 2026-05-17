@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useMemo } from "react";
 import { Settings, ChevronDown, ChevronUp, Copy, Check, Info } from "lucide-react";
 import clsx from "clsx";
 
@@ -48,14 +48,32 @@ export default function NamingConfig({
   const [caseStyle, setCaseStyle] = useState("snake");
   const [separator, setSeparator] = useState("_");
   const [collisionStrategy, setCollisionStrategy] = useState("suffix");
-  const [preview, setPreview] = useState("");
   const [copied, setCopied] = useState(false);
-  const [validationError, setValidationError] = useState("");
 
-  // Generate preview whenever template or settings change
-  useEffect(() => {
-    generatePreview();
-  }, [template, caseStyle, separator, mockupName, posterName]);
+  const preview = useMemo(() => {
+    let result = template;
+    const replacements = {
+      poster_name: posterName || "my_poster",
+      mockup_name: mockupName || "frame_mockup",
+      width: "1920",
+      height: "1080",
+      orientation: "landscape",
+      size: "1920x1080",
+      date: "2026-05-17",
+      time: "18-30-00",
+      timestamp: "1789583400",
+      index: "001",
+      batch_id: "abc123",
+    };
+
+    Object.entries(replacements).forEach(([key, value]) => {
+      result = result.replace(new RegExp(`\\{${key}\\}`, "g"), value);
+    });
+
+    result = applyCaseStyle(result, caseStyle);
+    result = result.replace(/(?<!\d)(\d)(?!\d)/g, "0$1");
+    return `${result || "mockup"}.webp`;
+  }, [template, caseStyle, mockupName, posterName]);
 
   // Notify parent of template changes
   useEffect(() => {
@@ -64,42 +82,7 @@ export default function NamingConfig({
     }
   }, [template, onTemplateChange]);
 
-  const generatePreview = async () => {
-    try {
-      // Simple client-side preview generation
-      let result = template;
-      const replacements = {
-        poster_name: posterName || "my_poster",
-        mockup_name: mockupName || "frame_mockup",
-        width: "1920",
-        height: "1080",
-        orientation: "landscape",
-        size: "1920x1080",
-        date: new Date().toISOString().split('T')[0],
-        time: new Date().toTimeString().split(' ')[0].replace(/:/g, '-'),
-        timestamp: Math.floor(Date.now() / 1000).toString(),
-        index: "001",
-        batch_id: "abc123",
-      };
-
-      Object.entries(replacements).forEach(([key, value]) => {
-        result = result.replace(new RegExp(`\\{${key}\\}`, 'g'), value);
-      });
-
-      // Apply case style
-      result = applyCaseStyle(result, caseStyle);
-      
-      // Pad single digits (1 -> 01, 2 -> 02)
-      result = result.replace(/(?<!\d)(\d)(?!\d)/g, '0$1');
-
-      setPreview(result + ".webp");
-      setValidationError("");
-    } catch (err) {
-      setValidationError("Invalid template");
-    }
-  };
-
-  const applyCaseStyle = (text, style) => {
+  function applyCaseStyle(text, style) {
     if (style === "original") return text;
     
     // Normalize to words
@@ -117,7 +100,7 @@ export default function NamingConfig({
       default:
         return text;
     }
-  };
+  }
 
   const insertPlaceholder = (placeholder) => {
     setTemplate(prev => prev + `{${placeholder}}`);
@@ -188,9 +171,6 @@ export default function NamingConfig({
                 )}
               </button>
             </div>
-            {validationError && (
-              <p className="mt-1 text-xs text-red-400">{validationError}</p>
-            )}
           </div>
 
           {/* Preset Templates */}
